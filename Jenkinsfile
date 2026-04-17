@@ -1,38 +1,13 @@
 pipeline {
     agent any
 
-    stages {
-
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Install Dependencies') {
-            steps {
-                sh 'npm install'
-            }
-        }
-
-        stage('Node Version') {
-            steps {
-                sh 'node -v || true'
-                sh 'npm -v || true'
-            }
-        }
-
-        stage('Run App (Smoke Test)') {
-            steps {
-                sh 'timeout 10s npm start || true'
-            }
-        }
+    tools {
+        nodejs 'NodeJS'
     }
-}pipeline {
-    agent {
-        docker {
-            image 'node:18'
-        }
+
+    environment {
+        APP_NAME = 'security-gate-simulator'
+        PORT     = '3000'
     }
 
     stages {
@@ -40,32 +15,53 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+                echo "Checked out branch: ${env.BRANCH_NAME ?: 'unknown'}"
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                sh 'npm install'
+                sh 'npm ci'
             }
         }
 
-        stage('Verify Node + npm') {
+        stage('Lint') {
             steps {
-                sh 'node -v'
-                sh 'npm -v'
+                sh 'npm run lint --if-present'
             }
         }
 
-        stage('Start App (Smoke Test)') {
+        stage('Test') {
             steps {
-                sh 'timeout 10s npm start || true'
+                sh 'npm test --if-present'
+            }
+        }
+
+        stage('Build Verification') {
+            steps {
+                sh 'node -e "require(\'./app.js\')" &'
+                sh 'sleep 3'
+                sh 'curl -f http://localhost:${PORT}/health || (echo "Health check failed" && exit 1)'
+                sh 'pkill -f "node app.js" || true'
+            }
+        }
+
+        stage('Archive') {
+            steps {
+                archiveArtifacts artifacts: '**/*.js, package.json', fingerprint: true
             }
         }
     }
 
     post {
+        success {
+            echo "Pipeline succeeded for ${APP_NAME}!"
+        }
+        failure {
+            echo "Pipeline FAILED for ${APP_NAME}. Check logs above."
+        }
         always {
-            echo 'Build completed'
+            cleanWs()
         }
     }
 }
