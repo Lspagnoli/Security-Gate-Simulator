@@ -51,6 +51,15 @@ pipeline {
                 archiveArtifacts artifacts: '**/*.js, package.json', fingerprint: true
             }
         }
+
+        stage('Deploy') {
+            steps {
+                sh 'docker build -t security-gate-simulator .'
+                sh 'docker stop app || true'
+                sh 'docker rm app || true'
+                sh 'docker run -d -p 3000:3000 --name app security-gate-simulator'
+            }
+        }
     }
 
     post {
