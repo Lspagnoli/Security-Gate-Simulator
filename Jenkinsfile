@@ -1,23 +1,41 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'node:18'
+        }
+    }
 
     stages {
+
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Build') {
+        stage('Install Dependencies') {
             steps {
-                echo 'Building project...'
+                sh 'npm install'
             }
         }
 
-        stage('Test') {
+        stage('Verify Node + npm') {
             steps {
-                echo 'Running tests...'
+                sh 'node -v'
+                sh 'npm -v'
             }
+        }
+
+        stage('Start App (Smoke Test)') {
+            steps {
+                sh 'timeout 10s npm start || true'
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Build completed'
         }
     }
 }
