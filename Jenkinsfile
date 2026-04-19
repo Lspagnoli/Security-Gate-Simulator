@@ -31,17 +31,17 @@ pipeline {
             }
         }
 
-        stage('Test') {
-            steps {
-                // TODO: add tests
-            }
-        }
+        // stage('Test') {
+        //     steps {
+        //         // TODO: add tests
+        //     }
+        // }
 
-        stage('Build App') {
-            steps {
-                // optional: app build step if needed
-            }
-        }
+        // stage('Build App') {
+        //     steps {
+        //         // optional: app build step if needed
+        //     }
+        // }
 
         stage('Build Docker Image') {
             steps {
@@ -49,11 +49,11 @@ pipeline {
             }
         }
 
-        stage('Push Image') {
-            steps {
-                // TODO: push to registry (Docker Hub / ECR / etc.)
-            }
-        }
+        // stage('Push Image') {
+        //     steps {
+        //         // TODO: push to registry (Docker Hub / ECR / etc.)
+        //     }
+        // }
 
         stage('Sign Image (Cosign)') {
             steps {
