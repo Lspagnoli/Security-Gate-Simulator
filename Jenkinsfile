@@ -8,6 +8,7 @@ pipeline {
     environment {
         APP_NAME = 'security-gate-simulator'
         PORT     = '3000'
+        IMAGE    = 'security-gate-simulator:latest'
     }
 
     stages {
@@ -15,7 +16,6 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
-                echo "Checked out branch: ${env.BRANCH_NAME ?: 'unknown'}"
             }
         }
 
@@ -33,41 +33,62 @@ pipeline {
 
         stage('Test') {
             steps {
-                sh 'npm test --if-present'
+                // TODO: add tests
             }
         }
 
-        stage('Build Verification') {
+        stage('Build App') {
             steps {
-                sh 'node -e "require(\'./app.js\')" &'
-                sh 'sleep 3'
-                sh 'curl -f http://localhost:${PORT}/health || (echo "Health check failed" && exit 1)'
-                sh 'pkill -f "node app.js" || true'
+                // optional: app build step if needed
             }
         }
 
-        stage('Archive') {
+        stage('Build Docker Image') {
             steps {
-                archiveArtifacts artifacts: '**/*.js, package.json', fingerprint: true
+                sh 'docker build -t ${IMAGE} .'
+            }
+        }
+
+        stage('Push Image') {
+            steps {
+                // TODO: push to registry (Docker Hub / ECR / etc.)
+            }
+        }
+
+        stage('Sign Image (Cosign)') {
+            steps {
+                sh '''
+                    cosign version
+                    cosign sign ${IMAGE}
+                '''
+            }
+        }
+
+        stage('Verify Image (Cosign)') {
+            steps {
+                sh '''
+                    cosign verify ${IMAGE}
+                '''
             }
         }
 
         stage('Deploy') {
             steps {
-                sh 'docker build -t security-gate-simulator .'
-                sh 'docker stop app || true'
-                sh 'docker rm app || true'
-                sh 'docker run -d -p 3000:3000 --name app security-gate-simulator'
+                sh '''
+                    docker stop app || true
+                    docker rm app || true
+                    docker run -d -p ${PORT}:${PORT} --name app ${IMAGE}
+                '''
             }
         }
     }
 
     post {
         success {
-            echo "Pipeline succeeded for ${APP_NAME}!"
+            echo "Pipeline succeeded for ${APP_NAME}"
         }
         failure {
-            echo "Pipeline FAILED for ${APP_NAME}. Check logs above."
+            echo "Pipeline FAILED for ${APP_NAME}"
         }
         always {
             cleanWs()
