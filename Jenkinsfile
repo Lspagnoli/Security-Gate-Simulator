@@ -1,77 +1,58 @@
 pipeline {
     agent any
-
     tools {
         nodejs 'NodeJS'
     }
-
     environment {
         APP_NAME = 'security-gate-simulator'
         PORT     = '3000'
         IMAGE    = 'security-gate-simulator:latest'
     }
-
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
+                echo "Checked out branch: ${env.BRANCH_NAME ?: 'unknown'}"
             }
         }
-
         stage('Install Dependencies') {
             steps {
                 sh 'npm ci'
             }
         }
-
         stage('Lint') {
             steps {
                 sh 'npm run lint --if-present'
             }
         }
-
-        // stage('Test') {
-        //     steps {
-        //         // TODO: add tests
-        //     }
-        // }
-
-        // stage('Build App') {
-        //     steps {
-        //         // optional: app build step if needed
-        //     }
-        // }
-
         stage('Build Docker Image') {
             steps {
+                // Diagnose Docker PATH before attempting build
+                sh 'which docker && docker --version'
                 sh 'docker build -t ${IMAGE} .'
             }
         }
-
-        // stage('Push Image') {
-        //     steps {
-        //         // TODO: push to registry (Docker Hub / ECR / etc.)
-        //     }
-        // }
-
         stage('Sign Image (Cosign)') {
             steps {
                 sh '''
                     cosign version
-                    cosign sign ${IMAGE}
+
+                    # Get the image digest (Cosign requires digest, not just tag)
+                    IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${IMAGE} 2>/dev/null || echo "")
+
+                    # Sign using key file stored as a Jenkins secret
+                    # Requires COSIGN_PASSWORD env var and cosign.key credential configured in Jenkins
+                    cosign sign --key cosign.key ${IMAGE}
                 '''
             }
         }
-
         stage('Verify Image (Cosign)') {
             steps {
                 sh '''
-                    cosign verify ${IMAGE}
+                    cosign verify --key cosign.pub ${IMAGE}
                 '''
             }
         }
-
         stage('Deploy') {
             steps {
                 sh '''
@@ -82,7 +63,6 @@ pipeline {
             }
         }
     }
-
     post {
         success {
             echo "Pipeline succeeded for ${APP_NAME}"
