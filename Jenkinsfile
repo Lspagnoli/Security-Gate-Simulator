@@ -54,9 +54,16 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY')]) {
                     sh '''
-                        # Create a signing config without transparency log
-                        curl https://raw.githubusercontent.com/sigstore/root-signing/refs/heads/main/targets/signing_config.v0.2.json | \
-                        jq 'del(.rekorTlogUrls)' > /tmp/signing-config.json
+                        # Create signing config without transparency log
+                        cat > /tmp/signing-config.json << 'EOF'
+        {
+          "mediaType": "application/vnd.dev.sigstore.signingconfig.v0.2+json",
+          "caUrls": ["https://fulcio.sigstore.dev"],
+          "oidcUrl": "https://oauth2.sigstore.dev/auth",
+          "rekorTlogUrls": [],
+          "tsaUrls": []
+        }
+        EOF
         
                         # Get image digest
                         IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' security-gate-simulator)
