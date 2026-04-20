@@ -56,7 +56,7 @@ pipeline {
                     sh '''
                         IMAGE_DIGEST=$(docker inspect --format='{{.Id}}' security-gate-simulator)
                         echo "Signing image digest: ${IMAGE_DIGEST}"
-                        COSIGN_DOCKER_MEDIA_TYPES=1 cosign sign --key ${COSIGN_KEY} --yes --registry-referrers-mode=legacy docker-daemon:security-gate-simulator:latest
+                        cosign sign --key ${COSIGN_KEY} --yes --local-image security-gate-simulator:latest
                     '''
                 }
             }
