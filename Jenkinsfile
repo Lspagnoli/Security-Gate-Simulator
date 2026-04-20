@@ -53,8 +53,19 @@ pipeline {
         stage('Sign Image') {
             steps {
                 withCredentials([file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY')]) {
-                    sh 'echo \'{"mediaType":"application/vnd.dev.sigstore.signingconfig.v0.2+json","caUrls":["https://fulcio.sigstore.dev"],"oidcUrl":"https://oauth2.sigstore.dev/auth","rekorTlogUrls":[],"tsaUrls":[]}\' > /tmp/signing-config.json'
                     sh '''
+                        python3 -c "
+        import json
+        config = {
+            'mediaType': 'application/vnd.dev.sigstore.signingconfig.v0.2+json',
+            'caUrls': ['https://fulcio.sigstore.dev'],
+            'oidcUrl': 'https://oauth2.sigstore.dev/auth',
+            'rekorTlogUrls': [],
+            'tsaUrls': []
+        }
+        with open('/tmp/signing-config.json', 'w') as f:
+            json.dump(config, f)
+        "
                         IMAGE_DIGEST=$(docker inspect --format="{{index .RepoDigests 0}}" security-gate-simulator)
                         echo "Signing: ${IMAGE_DIGEST}"
                         cosign sign --key ${COSIGN_KEY} --yes \
