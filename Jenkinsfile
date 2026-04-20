@@ -54,20 +54,18 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY')]) {
                     sh '''
-                        # Save image as tar and load it with a proper reference
-                        docker save security-gate-simulator:latest -o /tmp/security-gate-simulator.tar
-                        
-                        # Get the digest
-                        IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' security-gate-simulator 2>/dev/null || echo "")
-                        
-                        if [ -z "$IMAGE_DIGEST" ]; then
-                            echo "No registry digest found, tagging image for local signing..."
-                            IMAGE_REF="security-gate-simulator:latest"
-                            IMAGE_DIGEST="security-gate-simulator@$(docker inspect --format='{{.Id}}' security-gate-simulator)"
-                        fi
-                        
+                        # Create a signing config without transparency log
+                        curl https://raw.githubusercontent.com/sigstore/root-signing/refs/heads/main/targets/signing_config.v0.2.json | \
+                        jq 'del(.rekorTlogUrls)' > /tmp/signing-config.json
+        
+                        # Get image digest
+                        IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' security-gate-simulator)
                         echo "Signing: ${IMAGE_DIGEST}"
-                        cosign sign --key ${COSIGN_KEY} --yes --tlog-upload=false ${IMAGE_DIGEST}
+        
+                        cosign sign --key ${COSIGN_KEY} --yes \
+                            --signing-config /tmp/signing-config.json \
+                            --new-bundle-format \
+                            ${IMAGE_DIGEST}
                     '''
                 }
             }
