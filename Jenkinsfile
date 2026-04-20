@@ -56,7 +56,7 @@ pipeline {
                     sh '''
                         IMAGE_DIGEST=$(docker inspect --format='{{.Id}}' security-gate-simulator)
                         echo "Signing image digest: ${IMAGE_DIGEST}"
-                        cosign sign --key ${COSIGN_KEY} --yes docker-daemon:security-gate-simulator:latest
+                        cosign sign --key ${COSIGN_KEY} --yes security-gate-simulator@${IMAGE_DIGEST}
                     '''
                 }
             }
