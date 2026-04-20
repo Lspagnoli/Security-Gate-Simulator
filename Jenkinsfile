@@ -54,9 +54,20 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY')]) {
                     sh '''
-                        IMAGE_DIGEST=$(docker inspect --format='{{.Id}}' security-gate-simulator)
-                        echo "Signing image digest: ${IMAGE_DIGEST}"
-                        cosign sign --key ${COSIGN_KEY} --yes --local-image security-gate-simulator:latest
+                        # Save image as tar and load it with a proper reference
+                        docker save security-gate-simulator:latest -o /tmp/security-gate-simulator.tar
+                        
+                        # Get the digest
+                        IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' security-gate-simulator 2>/dev/null || echo "")
+                        
+                        if [ -z "$IMAGE_DIGEST" ]; then
+                            echo "No registry digest found, tagging image for local signing..."
+                            IMAGE_REF="security-gate-simulator:latest"
+                            IMAGE_DIGEST="security-gate-simulator@$(docker inspect --format='{{.Id}}' security-gate-simulator)"
+                        fi
+                        
+                        echo "Signing: ${IMAGE_DIGEST}"
+                        cosign sign --key ${COSIGN_KEY} --yes --tlog-upload=false ${IMAGE_DIGEST}
                     '''
                 }
             }
