@@ -53,22 +53,10 @@ pipeline {
         stage('Sign Image') {
             steps {
                 withCredentials([file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY')]) {
+                    sh 'echo \'{"mediaType":"application/vnd.dev.sigstore.signingconfig.v0.2+json","caUrls":["https://fulcio.sigstore.dev"],"oidcUrl":"https://oauth2.sigstore.dev/auth","rekorTlogUrls":[],"tsaUrls":[]}\' > /tmp/signing-config.json'
                     sh '''
-                        # Create signing config without transparency log
-                        cat > /tmp/signing-config.json << 'EOF'
-        {
-          "mediaType": "application/vnd.dev.sigstore.signingconfig.v0.2+json",
-          "caUrls": ["https://fulcio.sigstore.dev"],
-          "oidcUrl": "https://oauth2.sigstore.dev/auth",
-          "rekorTlogUrls": [],
-          "tsaUrls": []
-        }
-        EOF
-        
-                        # Get image digest
-                        IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' security-gate-simulator)
+                        IMAGE_DIGEST=$(docker inspect --format="{{index .RepoDigests 0}}" security-gate-simulator)
                         echo "Signing: ${IMAGE_DIGEST}"
-        
                         cosign sign --key ${COSIGN_KEY} --yes \
                             --signing-config /tmp/signing-config.json \
                             --new-bundle-format \
