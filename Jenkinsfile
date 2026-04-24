@@ -57,8 +57,7 @@ pipeline {
 
                     sh """
                         syft ${APP_NAME}:latest \
-                            -o spdx-json \
-                            --file ${sbomFile}
+                         -o spdx-json=${sbomFile}
                     """
 
                     archiveArtifacts artifacts: sbomFile, fingerprint: true
