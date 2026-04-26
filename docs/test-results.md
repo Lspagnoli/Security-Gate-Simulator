@@ -57,7 +57,71 @@ The following tests are prepared but pending Jenkins/Cosign integration:
 - TEST-003 Unsigned image blocked
 - TEST-005 Missing/tampered SBOM
 - TEST-006 Invalid SBOM blocked
+# Security Gate Simulator - Test Results
 
+## TEST-007: Document All Test Cases with Screenshots
+
+## Environment
+
+- Windows 11
+- Docker Desktop Kubernetes
+- Local Node.js Application
+- Namespace: securechain-dev
+
+---
+
+## Kubernetes Validation
+
+The following checks were completed successfully:
+
+- kubectl get nodes
+- kubectl get namespaces
+- kubectl get pods -n securechain-dev
+- kubectl get svc -n securechain-dev
+
+### Result
+
+- Cluster node status Ready
+- Namespaces created
+- Pod running (1/1)
+- Service exposed on NodePort
+
+### Screenshot
+
+![Kubernetes Validation](../screenshots/k8s-status.png)
+
+---
+
+## Application Validation
+
+The application was accessed successfully through:
+
+http://localhost:3000
+
+### Result
+
+Security Gate Simulator - Node App Running
+
+### Screenshot
+
+![Application Running](../screenshots/app-browser.png)
+
+---
+
+## Pending Dependent Test Cases
+
+The following tests are prepared and pending final CI/CD integration:
+
+- TEST-002 Vulnerable image blocked
+- TEST-003 Unsigned image blocked
+- TEST-005 Missing/tampered SBOM
+- TEST-006 Invalid SBOM blocked
+
+---
+
+## Summary
+
+Kubernetes deployment completed successfully. Application is operational, and the current environment is ready for integrated security pipeline testing.
 ---
 
 ## Summary

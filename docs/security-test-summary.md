@@ -2,47 +2,63 @@
 
 ## Overview
 
-The Security Gate Simulator project validates containerized application security before deployment. The system uses automated checks such as vulnerability scanning, SBOM validation, signature verification, and Kubernetes deployment controls.
+Security Gate Simulator validates container images before deployment using automated DevSecOps controls.
+
+The project focuses on improving software supply chain security through scanning, verification, and controlled deployment.
+
+---
 
 ## Completed Validation
 
 ### Infrastructure Validation
+
 - Kubernetes cluster configured successfully
-- securechain-dev and securechain-prod namespaces created
+- Development and production namespaces created
 - kubectl access verified
 - Deployment and service manifests created
 
 ### Deployment Validation
+
 - Application deployed successfully to Kubernetes
-- Pod reached Running state (1/1)
+- Pod reached Running state
 - Service exposed successfully
-- Application accessible on localhost:3000 using port-forward
+- Application accessible through localhost
 
 ### Container Validation
-- Clean application image created: security-gate-clean:latest
-- Vulnerable image created for future gate testing: security-gate-vuln:latest
+
+- Clean image prepared for successful pipeline scenarios
+- Vulnerable image prepared for negative security testing
+
+---
 
 ## Security Controls Prepared
 
-- SBOM generation workflow prepared
-- Vulnerability scanning workflow prepared
-- Kubernetes deployment target prepared
+- SBOM generation workflow
+- Vulnerability scanning workflow
+- Kubernetes deployment target
+- Signature validation workflow design
+
+---
 
 ## Pending Integrated Security Gates
 
-The following checks depend on final Jenkins / Cosign integration:
+The following controls depend on final CI/CD integration:
 
 - Block unsigned images
 - Block images with critical CVEs
 - Block images with missing or invalid SBOM
-- Automatic deploy only after all checks pass
+- Automatic deployment only after checks pass
+
+---
 
 ## Risks Identified
 
-- Unsigned images may be deployed if signature gate is disabled
-- Vulnerable images may pass if severity thresholds are not enforced
-- Manual deployment is possible unless CI/CD gate is enforced
+- Unsigned images may be trusted if signature checks are skipped
+- Vulnerable images may pass if severity thresholds are weak
+- Manual deployment may bypass automated controls
+
+---
 
 ## Conclusion
 
-The Kubernetes deployment environment is fully operational. Core security testing assets are prepared, and remaining controls require final CI/CD integration.
+The Kubernetes deployment environment is operational and core security validation components are prepared. Remaining items involve final CI/CD integration.

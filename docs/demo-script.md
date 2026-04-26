@@ -2,77 +2,75 @@
 
 ## Introduction
 
-Hello everyone. Our project is Security Gate Simulator, a DevSecOps solution that prevents insecure container images from reaching production environments.
+Hello everyone. Our project is **Security Gate Simulator**, a DevSecOps solution designed to prevent insecure container images from reaching production environments.
 
-The goal is to automate security checks before deployment.
+The project combines CI/CD automation, container security checks, and Kubernetes deployment controls into one workflow.
 
 ---
 
 ## Problem Statement
 
-Many teams deploy container images without verifying:
+Modern software teams often deploy containers without fully validating:
 
-- vulnerabilities
-- software bill of materials (SBOM)
-- digital signatures
-- deployment readiness
+- Known vulnerabilities
+- Software Bill of Materials (SBOM)
+- Image authenticity
+- Deployment readiness
 
-This creates software supply chain risk.
+This creates software supply chain and production security risks.
 
 ---
 
-## Our Solution
+## Proposed Solution
 
-We designed a pipeline with these stages:
+Our team designed a pipeline with the following stages:
 
 1. Source Code Checkout  
-2. Docker Build  
+2. Build Docker Image  
 3. Generate SBOM  
 4. Vulnerability Scan using Grype  
 5. Sign Image using Cosign  
 6. Verify Signature  
-7. Deploy to Kubernetes only if all checks pass
+7. Deploy to Kubernetes only after all checks pass
 
 ---
 
-## My Contribution (Person 2)
+## Team Implementation Areas
 
-My responsibilities focused on Kubernetes deployment and validation.
+The project work was divided across multiple areas:
 
-Completed work:
-
-- Kubernetes cluster setup
-- Namespaces creation
-- deployment.yaml and service.yaml
-- Manual deployment testing
-- Pod verification
-- Application access validation
+- CI/CD pipeline setup and automation
+- Security scanning and image trust validation
+- Kubernetes deployment and service exposure
+- Testing, documentation, and presentation readiness
 
 ---
 
-## Live Demo
+## Deployment Demonstration
 
-We deployed the application to Kubernetes.
+The application was deployed successfully in a Kubernetes environment.
 
-Results:
+Validation results:
 
-- Pod status: Running
+- Cluster operational
+- Namespaces created
+- Pod status Running
 - Service exposed successfully
-- Application accessible on localhost:3000
+- Application accessible on localhost
 
 ---
 
 ## Security Benefits
 
-This system helps block:
+This solution helps prevent deployment of:
 
-- vulnerable images
-- unsigned images
-- tampered artifacts
-- unsafe deployments
+- Vulnerable images
+- Unsigned images
+- Tampered artifacts
+- Unverified releases
 
 ---
 
 ## Conclusion
 
-Security Gate Simulator demonstrates how DevOps and security can be integrated into one automated release pipeline.
+Security Gate Simulator demonstrates how DevOps and security practices can be integrated into a practical automated release pipeline.
