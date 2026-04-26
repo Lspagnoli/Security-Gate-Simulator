@@ -49,6 +49,17 @@ Security Gate Simulator - Node App Running
 
 ---
 
+## Pending Dependent Test Cases
+
+The following tests are prepared but pending Jenkins/Cosign integration:
+
+- TEST-002 Vulnerable image blocked
+- TEST-003 Unsigned image blocked
+- TEST-005 Missing/tampered SBOM
+- TEST-006 Invalid SBOM blocked
+
+---
+
 ## Summary
 
 Kubernetes deployment completed successfully. Application is running and accessible. Person 2 Kubernetes responsibilities completed successfully.
