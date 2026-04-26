@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: securechain-app
+  namespace: securechain-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: securechain-app
+  template:
+    metadata:
+      labels:
+        app: securechain-app
+    spec:
+      containers:
+        - name: securechain-app
+          image: security-gate-clean:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3000
