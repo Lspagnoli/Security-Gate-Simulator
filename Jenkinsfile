@@ -4,8 +4,11 @@ pipeline {
         nodejs 'NodeJS'
     }
     environment {
-        APP_NAME = 'security-gate-simulator'
-        PORT     = '3000'
+        APP_NAME     = 'security-gate-simulator'
+        PORT         = '3000'
+        AWS_REGION   = 'us-east-1'
+        ECR_REGISTRY = '723322847039.dkr.ecr.us-east-1.amazonaws.com'
+        ECR_REPO     = "${ECR_REGISTRY}/${APP_NAME}"
     }
     stages {
         stage('Checkout') {
@@ -44,22 +47,42 @@ pipeline {
         }
         stage('Deploy') {
             steps {
-                sh 'docker build -t security-gate-simulator .'
+                sh 'docker build -t ${APP_NAME}:latest .'
                 sh 'docker stop app || true'
                 sh 'docker rm app || true'
-                sh 'docker run -d -p 3000:3000 --name app security-gate-simulator'
+                sh 'docker run -d -p 3000:3000 --name app ${APP_NAME}:latest'
+            }
+        }
+        stage('Push to ECR') {
+            steps {
+                script {
+                    sh """
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+
+                        docker tag ${APP_NAME}:latest ${ECR_REPO}:latest
+                        docker tag ${APP_NAME}:latest ${ECR_REPO}:build-${env.BUILD_NUMBER}
+
+                        docker push ${ECR_REPO}:latest
+                        docker push ${ECR_REPO}:build-${env.BUILD_NUMBER}
+                    """
+                    echo "Image pushed to ECR: ${ECR_REPO}:build-${env.BUILD_NUMBER}"
+                }
+            }
+            post {
+                success {
+                    echo "ECR push completed successfully."
+                }
+                failure {
+                    error "ECR push failed — check AWS credentials and ECR permissions."
+                }
             }
         }
         stage('Generate SBOM') {
             steps {
                 script {
                     def sbomFile = "sbom-${env.BUILD_NUMBER}.spdx.json"
-
-                    sh """
-                        syft ${APP_NAME}:latest \
-                         -o spdx-json=${sbomFile}
-                    """
-
+                    sh "syft ${APP_NAME}:latest -o spdx-json=${sbomFile}"
                     archiveArtifacts artifacts: sbomFile, fingerprint: true
                     stash name: 'sbom', includes: sbomFile
                 }
@@ -76,12 +99,11 @@ pipeline {
         stage('Vulnerability Scan') {
             steps {
                 script {
-                    def sbomFile  = "sbom-${env.BUILD_NUMBER}.spdx.json"
+                    def sbomFile   = "sbom-${env.BUILD_NUMBER}.spdx.json"
                     def reportFile = "grype-report-${env.BUILD_NUMBER}.json"
 
                     unstash 'sbom'
 
-                    // Run Grype — exit code 0 regardless of findings so we control the gate
                     def grypeExit = sh(
                         script: """
                             grype sbom:./${sbomFile} \
@@ -97,8 +119,7 @@ pipeline {
                     if (grypeExit == 0) {
                         echo "Vulnerability scan passed — no CRITICAL vulnerabilities found."
                     } else {
-                        // Parse report to surface a quick summary in the build log
-                        def report = readJSON file: reportFile
+                        def report    = readJSON file: reportFile
                         def criticals = report.matches.findAll {
                             it.vulnerability.severity.toUpperCase() == 'CRITICAL'
                         }
@@ -106,7 +127,7 @@ pipeline {
                         criticals.each { vuln ->
                             echo "  [${vuln.vulnerability.id}] ${vuln.artifact.name}@${vuln.artifact.version} — ${vuln.vulnerability.description?.take(120) ?: 'no description'}"
                         }
-                        error "Build failed: ${criticals.size()} CRITICAL vulnerability(s) detected. Review grype-report-${env.BUILD_NUMBER}.json for full details."
+                        error "Build failed: ${criticals.size()} CRITICAL vulnerability(s) detected."
                     }
                 }
             }
