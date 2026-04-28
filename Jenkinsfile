@@ -3,9 +3,6 @@ pipeline {
     tools {
         nodejs 'NodeJS'
     }
-    options {
-        buildDiscarder(logRotator(numToKeepStr: '5', daysToKeepStr: '7'))
-    }
     environment {
         APP_NAME     = 'security-gate-simulator'
         PORT         = '3000'
@@ -62,10 +59,8 @@ pipeline {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | \
                             docker login --username AWS --password-stdin ${ECR_REGISTRY}
-
                         docker tag ${APP_NAME}:latest ${ECR_REPO}:latest
                         docker tag ${APP_NAME}:latest ${ECR_REPO}:build-${env.BUILD_NUMBER}
-
                         docker push ${ECR_REPO}:latest
                         docker push ${ECR_REPO}:build-${env.BUILD_NUMBER}
                     """
@@ -78,6 +73,34 @@ pipeline {
                 }
                 failure {
                     error "ECR push failed — check AWS credentials and ECR permissions."
+                }
+            }
+        }
+        stage('Sign Image') {
+            steps {
+                withCredentials([
+                    file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
+                    string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
+                ]) {
+                    script {
+                        sh """
+                            aws ecr get-login-password --region ${AWS_REGION} | \
+                                docker login --username AWS --password-stdin ${ECR_REGISTRY}
+
+                            cosign sign --key \$COSIGN_KEY \
+                                --yes \
+                                ${ECR_REPO}:build-${env.BUILD_NUMBER}
+                        """
+                        echo "Image signed: ${ECR_REPO}:build-${env.BUILD_NUMBER}"
+                    }
+                }
+            }
+            post {
+                success {
+                    echo "Cosign signing completed successfully."
+                }
+                failure {
+                    error "Image signing failed — check Cosign output above."
                 }
             }
         }
@@ -149,18 +172,9 @@ pipeline {
             echo "Pipeline FAILED for ${APP_NAME}. Check logs above."
         }
         always {
-            cleanWs(
-                cleanWhenSuccess: true,
-                cleanWhenFailure: true,
-                cleanWhenAborted: true,
-                deleteDirs: true
-            )
-            sh '''
-                rm -rf /var/jenkins_home/.cache/npm
-                rm -rf /var/jenkins_home/.cache/pip
-                rm -rf /var/jenkins_home/.npm
-                docker system prune -f
-            '''
+            cleanWs()
+            sh 'rm -rf /var/jenkins_home/.cache/grype || true'
+            sh 'docker system prune -f || true'
         }
     }
 }
