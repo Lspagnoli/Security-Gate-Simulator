@@ -3,6 +3,9 @@ pipeline {
     tools {
         nodejs 'NodeJS'
     }
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '5', daysToKeepStr: '7'))
+    }
     environment {
         APP_NAME     = 'security-gate-simulator'
         PORT         = '3000'
@@ -146,7 +149,18 @@ pipeline {
             echo "Pipeline FAILED for ${APP_NAME}. Check logs above."
         }
         always {
-            cleanWs()
+            cleanWs(
+                cleanWhenSuccess: true,
+                cleanWhenFailure: true,
+                cleanWhenAborted: true,
+                deleteDirs: true
+            )
+            sh '''
+                rm -rf /var/jenkins_home/.cache/npm
+                rm -rf /var/jenkins_home/.cache/pip
+                rm -rf /var/jenkins_home/.npm
+                docker system prune -f
+            '''
         }
     }
 }
