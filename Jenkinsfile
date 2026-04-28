@@ -110,10 +110,9 @@ pipeline {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | \
                             docker login --username AWS --password-stdin ${ECR_REGISTRY}
-        
+                    
                         cosign verify --key cosign.pub \
-                            ${ECR_REPO}:build-${env.BUILD_NUMBER} \
-                            | jq .
+                            ${ECR_REPO}:build-${env.BUILD_NUMBER}
                     """
                     echo "Signature verified for: ${ECR_REPO}:build-${env.BUILD_NUMBER}"
                 }
