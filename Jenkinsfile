@@ -104,6 +104,29 @@ pipeline {
                 }
             }
         }
+        stage('Verify Signature') {
+            steps {
+                script {
+                    sh """
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+        
+                        cosign verify --key cosign.pub \
+                            ${ECR_REPO}:build-${env.BUILD_NUMBER} \
+                            | jq .
+                    """
+                    echo "Signature verified for: ${ECR_REPO}:build-${env.BUILD_NUMBER}"
+                }
+            }
+            post {
+                success {
+                    echo "Signature verification passed."
+                }
+                failure {
+                    error "Signature verification failed — image may have been tampered with."
+                }
+            }
+        }
         stage('Generate SBOM') {
             steps {
                 script {
