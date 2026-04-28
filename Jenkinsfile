@@ -86,8 +86,8 @@ pipeline {
                         sh """
                             aws ecr get-login-password --region ${AWS_REGION} | \
                                 docker login --username AWS --password-stdin ${ECR_REGISTRY}
-
-                            cosign sign --key \$COSIGN_KEY \
+        
+                            COSIGN_PASSWORD=\$COSIGN_PASSWORD cosign sign --key \$COSIGN_KEY \
                                 --yes \
                                 ${ECR_REPO}:build-${env.BUILD_NUMBER}
                         """
