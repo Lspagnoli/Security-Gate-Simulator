@@ -107,33 +107,34 @@ pipeline {
         }
 
     stage('Deploy to Kubernetes') {
-    steps {
-        withCredentials([
-            file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')
-        ]) {
-            sh '''
-                export KUBECONFIG=$KUBECONFIG_FILE
+            steps {
+                withCredentials([
+                    file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')
+                ]) {
+                    sh '''
+                        export KUBECONFIG=$KUBECONFIG_FILE
 
-                kubectl get nodes
+                        kubectl get nodes
 
-                kubectl apply -f k8s/namespace.yaml --validate=false
-                kubectl apply -f k8s/deployment.yaml --validate=false
-                kubectl apply -f k8s/service.yaml --validate=false
+                        kubectl apply -f k8s/namespace.yaml --validate=false
+                        kubectl apply -f k8s/deployment.yaml --validate=false
+                        kubectl apply -f k8s/service.yaml --validate=false
 
-                kubectl set image deployment/securechain-app \
-                securechain-app=${IMAGE_URI} \
-                -n ${K8S_NAMESPACE}
+                        kubectl set image deployment/securechain-app \
+                        securechain-app=${IMAGE_URI} \
+                        -n ${K8S_NAMESPACE}
 
-                kubectl rollout status deployment/securechain-app \
-                -n ${K8S_NAMESPACE} \
-                --timeout=120s
+                        kubectl rollout status deployment/securechain-app \
+                        -n ${K8S_NAMESPACE} \
+                        --timeout=120s
 
-                kubectl get pods -n ${K8S_NAMESPACE}
-                kubectl get svc -n ${K8S_NAMESPACE}
-            '''
+                        kubectl get pods -n ${K8S_NAMESPACE}
+                        kubectl get svc -n ${K8S_NAMESPACE}
+                    '''
+                }
+            }
         }
     }
-}
 
     post {
         success {
