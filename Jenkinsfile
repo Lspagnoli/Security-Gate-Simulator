@@ -6,12 +6,12 @@ pipeline {
     }
 
     environment {
-        APP_NAME     = 'security-gate-simulator'
-        AWS_REGION   = 'us-east-1'
-        ECR_REGISTRY = '723322847039.dkr.ecr.us-east-1.amazonaws.com'
-        ECR_REPO     = "${ECR_REGISTRY}/${APP_NAME}"
-        IMAGE_TAG    = "build-${BUILD_NUMBER}"
-        IMAGE_URI    = "${ECR_REPO}:${IMAGE_TAG}"
+        APP_NAME      = 'security-gate-simulator'
+        AWS_REGION    = 'us-east-1'
+        ECR_REGISTRY  = '723322847039.dkr.ecr.us-east-1.amazonaws.com'
+        ECR_REPO      = "${ECR_REGISTRY}/${APP_NAME}"
+        IMAGE_TAG     = "build-${BUILD_NUMBER}"
+        IMAGE_URI     = "${ECR_REPO}:${IMAGE_TAG}"
         K8S_NAMESPACE = 'securechain-dev'
     }
 
@@ -36,8 +36,10 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t ${APP_NAME}:latest .'
-                sh 'docker tag ${APP_NAME}:latest ${IMAGE_URI}'
+                sh '''
+                    docker build -t ${APP_NAME}:latest .
+                    docker tag ${APP_NAME}:latest ${IMAGE_URI}
+                '''
             }
         }
 
@@ -50,7 +52,12 @@ pipeline {
 
         stage('Vulnerability Scan Gate') {
             steps {
-                sh 'grype sbom:sbom-${BUILD_NUMBER}.spdx.json --fail-on critical'
+                sh '''
+                    grype sbom:sbom-${BUILD_NUMBER}.spdx.json \
+                    -o json --file grype-report-${BUILD_NUMBER}.json \
+                    --fail-on critical
+                '''
+                archiveArtifacts artifacts: 'grype-report-*.json', fingerprint: true
             }
         }
 
@@ -80,7 +87,7 @@ pipeline {
                     string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
                 ]) {
                     sh '''
-                        COSIGN_PASSWORD=$COSIGN_PASSWORD cosign sign --key $COSIGN_KEY --yes ${IMAGE_URI}
+                        cosign sign --key $COSIGN_KEY --yes ${IMAGE_URI}
                     '''
                 }
             }
@@ -88,7 +95,13 @@ pipeline {
 
         stage('Verify Image Signature Gate') {
             steps {
-                sh 'cosign verify --key cosign.pub ${IMAGE_URI}'
+                withCredentials([
+                    file(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUB')
+                ]) {
+                    sh '''
+                        cosign verify --key $COSIGN_PUB ${IMAGE_URI}
+                    '''
+                }
             }
         }
 
@@ -98,11 +111,16 @@ pipeline {
                     kubectl apply -f k8s/namespace.yaml
                     kubectl apply -f k8s/service.yaml
 
-                    kubectl set image deployment/securechain-app \
-                        securechain-app=${IMAGE_URI} \
-                        -n ${K8S_NAMESPACE} || kubectl apply -f k8s/deployment.yaml
+                    kubectl apply -f k8s/deployment.yaml
 
-                    kubectl rollout status deployment/securechain-app -n ${K8S_NAMESPACE} --timeout=120s
+                    kubectl set image deployment/securechain-app \
+                    securechain-app=${IMAGE_URI} \
+                    -n ${K8S_NAMESPACE}
+
+                    kubectl rollout status deployment/securechain-app \
+                    -n ${K8S_NAMESPACE} \
+                    --timeout=120s
+
                     kubectl get pods -n ${K8S_NAMESPACE}
                     kubectl get svc -n ${K8S_NAMESPACE}
                 '''
@@ -114,11 +132,13 @@ pipeline {
         success {
             echo "Pipeline passed. Secure image deployed: ${IMAGE_URI}"
         }
+
         failure {
-            echo 'Pipeline failed. Security gate blocked deployment or deployment failed.'
+            echo "Pipeline failed. Security gate blocked deployment or deployment failed."
         }
+
         always {
-            archiveArtifacts artifacts: 'grype-report-*.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'sbom-*.spdx.json, grype-report-*.json', allowEmptyArchive: true
             sh 'docker system prune -f || true'
         }
     }
