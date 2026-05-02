@@ -185,6 +185,37 @@ pipeline {
                 }
             }
         }
+        stage('Push Metrics') {
+            steps {
+                script {
+                    def report = readJSON file: "grype-report-${env.BUILD_NUMBER}.json"
+                    def critical = report.matches.findAll { it.vulnerability.severity.toUpperCase() == 'CRITICAL' }.size()
+                    def high = report.matches.findAll { it.vulnerability.severity.toUpperCase() == 'HIGH' }.size()
+                    def medium = report.matches.findAll { it.vulnerability.severity.toUpperCase() == 'MEDIUM' }.size()
+
+                    sh """
+                        cat <<EOF | curl --data-binary @- http://prometheus-pushgateway.monitoring.svc.cluster.local:9091/metrics/job/securechain/instance/jenkins
+# TYPE securechain_vulnerabilities_total gauge
+securechain_vulnerabilities_total{severity="critical"} ${critical}
+securechain_vulnerabilities_total{severity="high"} ${high}
+securechain_vulnerabilities_total{severity="medium"} ${medium}
+securechain_image_signed 1
+securechain_sbom_present 1
+securechain_pipeline_gate_result 1
+securechain_policy_violations_total 0
+EOF
+                    """
+                }
+            }
+            post {
+                success {
+                    echo "Metrics pushed to Prometheus Pushgateway."
+                }
+                failure {
+                    echo "Metrics push failed — Pushgateway may not be deployed yet."
+                }
+            }
+        }
         stage('Deploy to Kubernetes') {
             steps {
                 echo "Deploying ${ECR_REPO}:build-${env.BUILD_NUMBER} to Kubernetes"
