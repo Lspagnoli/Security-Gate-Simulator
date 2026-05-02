@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: securechain-app
-          image: security-gate-clean:latest
-          imagePullPolicy: Never
+          image: 723322847039.dkr.ecr.us-east-1.amazonaws.com/security-gate-simulator:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 3000
