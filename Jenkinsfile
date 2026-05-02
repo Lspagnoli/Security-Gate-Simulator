@@ -66,6 +66,8 @@ pipeline {
 
         stage('Generate SBOM') {
             steps {
+                sh 'rm -rf /var/jenkins_home/.cache/grype || true'
+                sh 'docker system prune -f || true'
                 sh 'syft ${APP_NAME}:latest -o spdx-json=sbom-${BUILD_NUMBER}.spdx.json'
                 archiveArtifacts artifacts: 'sbom-*.spdx.json', fingerprint: true
             }
@@ -82,12 +84,8 @@ pipeline {
         stage('Vulnerability Scan Gate') {
             steps {
                 script {
-                    // Pre-clean to ensure disk space
-                    sh 'rm -rf /var/jenkins_home/.cache/grype || true'
-                    sh 'docker system prune -af || true'
-                    
                     def reportFile = "grype-report-${env.BUILD_NUMBER}.json"
-        
+
                     def grypeExit = sh(
                         script: """
                             grype sbom:sbom-${env.BUILD_NUMBER}.spdx.json \
@@ -97,13 +95,13 @@ pipeline {
                         """,
                         returnStatus: true
                     )
-        
+
                     archiveArtifacts artifacts: reportFile, fingerprint: true
-        
+
                     if (grypeExit == 0) {
                         echo "Vulnerability scan passed — no CRITICAL vulnerabilities found."
                     } else {
-                        def report = readJSON file: reportFile
+                        def report    = readJSON file: reportFile
                         def criticals = report.matches.findAll {
                             it.vulnerability.severity.toUpperCase() == 'CRITICAL'
                         }
