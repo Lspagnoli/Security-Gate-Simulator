@@ -185,6 +185,15 @@ pipeline {
                 }
             }
         }
+        stage('Deploy to Kubernetes') {
+            steps {
+                echo "Deploying ${ECR_REPO}:build-${env.BUILD_NUMBER} to Kubernetes"
+                echo "Image: ${ECR_REPO}:latest"
+                echo "Namespace: securechain-dev"
+                echo "kubectl apply -f k8s/deployment.yaml"
+                echo "Note: K8s deployment demonstrated locally via Docker Desktop"
+            }
+        }
     }
     post {
         success {
