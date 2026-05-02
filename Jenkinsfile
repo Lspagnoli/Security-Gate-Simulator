@@ -1,166 +1,145 @@
 pipeline {
     agent any
+
     tools {
         nodejs 'NodeJS'
     }
-    options {
-        buildDiscarder(logRotator(numToKeepStr: '5', daysToKeepStr: '7'))
-    }
+
     environment {
-        APP_NAME     = 'security-gate-simulator'
-        PORT         = '3000'
-        AWS_REGION   = 'us-east-1'
-        ECR_REGISTRY = '723322847039.dkr.ecr.us-east-1.amazonaws.com'
-        ECR_REPO     = "${ECR_REGISTRY}/${APP_NAME}"
+        APP_NAME      = 'security-gate-simulator'
+        AWS_REGION    = 'us-east-1'
+        ECR_REGISTRY  = '723322847039.dkr.ecr.us-east-1.amazonaws.com'
+        ECR_REPO      = "${ECR_REGISTRY}/${APP_NAME}"
+        IMAGE_TAG     = "build-${BUILD_NUMBER}"
+        IMAGE_URI     = "${ECR_REPO}:${IMAGE_TAG}"
+        K8S_NAMESPACE = 'securechain-dev'
     }
+
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
-                echo "Checked out branch: ${env.BRANCH_NAME ?: 'unknown'}"
             }
         }
+
         stage('Install Dependencies') {
             steps {
                 sh 'npm ci'
             }
         }
-        stage('Lint') {
-            steps {
-                sh 'npm run lint --if-present'
-            }
-        }
-        stage('Test') {
+
+        stage('App Test') {
             steps {
                 sh 'npm test --if-present'
             }
         }
-        stage('Build Verification') {
-            steps {
-                sh 'node -e "require(\'./app.js\')" &'
-                sh 'sleep 3'
-                sh 'curl -f http://localhost:${PORT}/health || (echo "Health check failed" && exit 1)'
-                sh 'pkill -f "node app.js" || true'
-            }
-        }
-        stage('Archive') {
-            steps {
-                archiveArtifacts artifacts: '**/*.js, package.json', fingerprint: true
-            }
-        }
-        stage('Deploy') {
-            steps {
-                sh 'docker build -t ${APP_NAME}:latest .'
-                sh 'docker stop app || true'
-                sh 'docker rm app || true'
-                sh 'docker run -d -p 3000:3000 --name app ${APP_NAME}:latest'
-            }
-        }
-        stage('Push to ECR') {
-            steps {
-                script {
-                    sh """
-                        aws ecr get-login-password --region ${AWS_REGION} | \
-                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-                        docker tag ${APP_NAME}:latest ${ECR_REPO}:latest
-                        docker tag ${APP_NAME}:latest ${ECR_REPO}:build-${env.BUILD_NUMBER}
-
-                        docker push ${ECR_REPO}:latest
-                        docker push ${ECR_REPO}:build-${env.BUILD_NUMBER}
-                    """
-                    echo "Image pushed to ECR: ${ECR_REPO}:build-${env.BUILD_NUMBER}"
-                }
-            }
-            post {
-                success {
-                    echo "ECR push completed successfully."
-                }
-                failure {
-                    error "ECR push failed — check AWS credentials and ECR permissions."
-                }
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                    docker build -t ${APP_NAME}:latest .
+                    docker tag ${APP_NAME}:latest ${IMAGE_URI}
+                '''
             }
         }
+
         stage('Generate SBOM') {
             steps {
-                script {
-                    def sbomFile = "sbom-${env.BUILD_NUMBER}.spdx.json"
-                    sh "syft ${APP_NAME}:latest -o spdx-json=${sbomFile}"
-                    archiveArtifacts artifacts: sbomFile, fingerprint: true
-                    stash name: 'sbom', includes: sbomFile
-                }
+                sh 'syft ${APP_NAME}:latest -o spdx-json=sbom-${BUILD_NUMBER}.spdx.json'
+                archiveArtifacts artifacts: 'sbom-*.spdx.json', fingerprint: true
             }
-            post {
-                success {
-                    echo "SBOM generated successfully: sbom-${env.BUILD_NUMBER}.spdx.json"
-                }
-                failure {
-                    error "SBOM generation failed — check Syft output above"
+        }
+
+        stage('Vulnerability Scan Gate') {
+            steps {
+                sh '''
+                    grype sbom:sbom-${BUILD_NUMBER}.spdx.json \
+                    -o json --file grype-report-${BUILD_NUMBER}.json \
+                    --fail-on critical
+                '''
+                archiveArtifacts artifacts: 'grype-report-*.json', fingerprint: true
+            }
+        }
+
+        stage('Login to ECR') {
+            steps {
+                sh '''
+                    aws ecr get-login-password --region ${AWS_REGION} | \
+                    docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                '''
+            }
+        }
+
+        stage('Push Image to ECR') {
+            steps {
+                sh '''
+                    docker push ${IMAGE_URI}
+                    docker tag ${APP_NAME}:latest ${ECR_REPO}:latest
+                    docker push ${ECR_REPO}:latest
+                '''
+            }
+        }
+
+        stage('Sign Image with Cosign') {
+            steps {
+                withCredentials([
+                    file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
+                    string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
+                ]) {
+                    sh '''
+                        cosign sign --key $COSIGN_KEY --yes ${IMAGE_URI}
+                    '''
                 }
             }
         }
-        stage('Vulnerability Scan') {
+
+        stage('Verify Image Signature Gate') {
             steps {
-                script {
-                    def sbomFile   = "sbom-${env.BUILD_NUMBER}.spdx.json"
-                    def reportFile = "grype-report-${env.BUILD_NUMBER}.json"
-
-                    unstash 'sbom'
-
-                    def grypeExit = sh(
-                        script: """
-                            grype sbom:./${sbomFile} \
-                                -o json \
-                                --file ${reportFile} \
-                                --fail-on critical
-                        """,
-                        returnStatus: true
-                    )
-
-                    archiveArtifacts artifacts: reportFile, fingerprint: true
-
-                    if (grypeExit == 0) {
-                        echo "Vulnerability scan passed — no CRITICAL vulnerabilities found."
-                    } else {
-                        def report    = readJSON file: reportFile
-                        def criticals = report.matches.findAll {
-                            it.vulnerability.severity.toUpperCase() == 'CRITICAL'
-                        }
-                        echo "CRITICAL vulnerabilities found (${criticals.size()}):"
-                        criticals.each { vuln ->
-                            echo "  [${vuln.vulnerability.id}] ${vuln.artifact.name}@${vuln.artifact.version} — ${vuln.vulnerability.description?.take(120) ?: 'no description'}"
-                        }
-                        error "Build failed: ${criticals.size()} CRITICAL vulnerability(s) detected."
-                    }
+                withCredentials([
+                    file(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUB')
+                ]) {
+                    sh '''
+                        cosign verify --key $COSIGN_PUB ${IMAGE_URI}
+                    '''
                 }
             }
-            post {
-                success {
-                    echo "Vulnerability scan completed — no CRITICAL issues."
-                }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh '''
+                    kubectl apply -f k8s/namespace.yaml
+                    kubectl apply -f k8s/service.yaml
+
+                    kubectl apply -f k8s/deployment.yaml
+
+                    kubectl set image deployment/securechain-app \
+                    securechain-app=${IMAGE_URI} \
+                    -n ${K8S_NAMESPACE}
+
+                    kubectl rollout status deployment/securechain-app \
+                    -n ${K8S_NAMESPACE} \
+                    --timeout=120s
+
+                    kubectl get pods -n ${K8S_NAMESPACE}
+                    kubectl get svc -n ${K8S_NAMESPACE}
+                '''
             }
         }
     }
+
     post {
         success {
-            echo "Pipeline succeeded for ${APP_NAME}!"
+            echo "Pipeline passed. Secure image deployed: ${IMAGE_URI}"
         }
+
         failure {
-            echo "Pipeline FAILED for ${APP_NAME}. Check logs above."
+            echo "Pipeline failed. Security gate blocked deployment or deployment failed."
         }
+
         always {
-            cleanWs(
-                cleanWhenSuccess: true,
-                cleanWhenFailure: true,
-                cleanWhenAborted: true,
-                deleteDirs: true
-            )
-            sh '''
-                rm -rf /var/jenkins_home/.cache/npm
-                rm -rf /var/jenkins_home/.cache/pip
-                rm -rf /var/jenkins_home/.npm
-                docker system prune -f
-            '''
+            archiveArtifacts artifacts: 'sbom-*.spdx.json, grype-report-*.json', allowEmptyArchive: true
+            sh 'docker system prune -f || true'
         }
     }
 }
