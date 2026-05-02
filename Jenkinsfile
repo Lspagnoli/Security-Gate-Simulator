@@ -80,15 +80,15 @@ pipeline {
                 '''
             }
         }
-
         stage('Sign Image with Cosign') {
             steps {
                 withCredentials([
-                    file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
-                    string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
+                file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
+                string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
                 ]) {
                     sh '''
-                        cosign sign --key $COSIGN_KEY --yes ${IMAGE_URI}
+                    export COSIGN_PASSWORD=$COSIGN_PASSWORD
+                    cosign sign --key $COSIGN_KEY --yes ${IMAGE_URI}
                     '''
                 }
             }
