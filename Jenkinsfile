@@ -64,23 +64,6 @@ pipeline {
             }
         }
 
-        stage('Generate SBOM') {
-            steps {
-                sh 'rm -rf /var/jenkins_home/.cache/grype || true'
-                sh 'docker system prune -f || true'
-                sh 'syft ${APP_NAME}:latest -o spdx-json=sbom-${BUILD_NUMBER}.spdx.json'
-                archiveArtifacts artifacts: 'sbom-*.spdx.json', fingerprint: true
-            }
-            post {
-                success {
-                    echo "SBOM generated successfully: sbom-${BUILD_NUMBER}.spdx.json"
-                }
-                failure {
-                    error "SBOM generation failed — check Syft output above"
-                }
-            }
-        }
-
         stage('Vulnerability Scan Gate') {
             steps {
                 script {
