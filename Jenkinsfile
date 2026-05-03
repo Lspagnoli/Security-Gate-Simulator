@@ -227,9 +227,18 @@ pipeline {
     post {
         success {
             echo "Pipeline succeeded for ${APP_NAME}! Secure image deployed: ${IMAGE_URI}"
+            sh '''
+                docker stop app || true
+                docker rm app || true
+                docker run -d -p 3000:3000 --name app ${APP_NAME}:latest || true
+            '''
         }
         failure {
             echo "Pipeline FAILED for ${APP_NAME}. Check logs above."
+            sh '''
+                docker stop app || true
+                docker rm app || true
+            '''
         }
         always {
             cleanWs()
